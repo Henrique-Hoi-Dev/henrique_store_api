@@ -11,7 +11,6 @@ const session = require('express-session');
 const i18n = require('i18n');
 const middle = require('./middleware');
 const addRouters = require('./routers');
-const mongoosePaginate = require('mongoose-paginate-v2');
 const logger = require('../utils/logger');
 const pinoHttp = require('pino-http')({ logger: logger });
 const csrf = require('csurf');
@@ -25,11 +24,6 @@ const memoryStore = new session.MemoryStore();
 const app = express();
 
 app.use(pinoHttp);
-
-mongoosePaginate.paginate.options = {
-    lean: true,
-    limit: 20
-};
 
 i18n.configure({
     locales: ['en'],
@@ -48,7 +42,19 @@ const rawBodySaver = function (req, res, buffer, encoding) {
 };
 
 app.use(compress());
-app.use(cors());
+
+// CORS configuration for API
+const corsOptions = {
+    origin: process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',')
+        : ['http://localhost:3000', 'http://localhost:3001'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 86400 // 24 hours
+};
+app.use(cors(corsOptions));
 app.use(
     bodyParser.json({
         limit: '50mb',
@@ -77,14 +83,34 @@ app.use(i18n.init);
 
 app.disable('x-powered-by');
 
+// Security middleware
 app.use(helmet.noSniff());
-app.use(helmet.frameguard());
+app.use(helmet.frameguard({ action: 'deny' }));
 app.use(helmet.hidePoweredBy());
+app.use(helmet.xssFilter());
+app.use(helmet.referrerPolicy({ policy: 'strict-origin-when-cross-origin' }));
 
 app.use((req, res, next) => {
+    // Security headers for API
     res.set('X-Content-Type-Options', 'nosniff');
-    res.set('X-Frame-Options', 'SAMEORIGIN');
-    res.set('Content-Security-Policy', "frame-ancestors 'none'");
+    res.set('X-Frame-Options', 'DENY');
+    res.set('X-XSS-Protection', '1; mode=block');
+    res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+    // Content Security Policy for API
+    const cspPolicy = [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https:",
+        "font-src 'self'",
+        "connect-src 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'"
+    ].join('; ');
+
+    res.set('Content-Security-Policy', cspPolicy);
 
     return next();
 });
@@ -108,6 +134,7 @@ app.use(middle.throw404);
 
 app.use(middle.logError);
 app.use(middle.handleError);
+app.use(middle.errorHandler);
 
 addRouters(routers.v1);
 

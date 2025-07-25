@@ -6,7 +6,7 @@ const validationsErrorHandler = new ValidationsErrorHandler();
 const logger = require('../../../utils/logger');
 
 class BaseController {
-    constructor(errorHandler) {
+    constructor(errorHandler = null) {
         this.errorHandler = errorHandler;
         this.validationsErrorHandler = validationsErrorHandler;
         this.httpStatus = HttpStatus;
