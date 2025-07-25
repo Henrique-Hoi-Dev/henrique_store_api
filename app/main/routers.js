@@ -1,5 +1,4 @@
-const baseRouter = require('../api/v1/business/base/base_router');
-const { Router } = require('express');
+const productRouter = require('../api/v1/business/product/product_router');
 
 const addRouters = (router) => {
     router.route('/health').get((req, res) => {
@@ -7,7 +6,7 @@ const addRouters = (router) => {
         return res.status(200).send();
     });
 
-    router.use('/base', baseRouter(Router()));
+    router.use('/product', productRouter);
 
     return router;
 };

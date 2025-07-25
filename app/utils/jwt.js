@@ -1,57 +1,76 @@
 const jwt = require('jsonwebtoken');
 
 const generateToken = (payload = {}) => {
-    const token = jwt.sign(payload, process.env.MYCASH_JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN
+    if (!process.env.JWT_SECRET) {
+        throw new Error('MISSING_JWT_SECRET');
+    }
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+        issuer: process.env.JWT_ISSUER || 'henrique-store-api',
+        audience: process.env.JWT_AUDIENCE || 'henrique-store-users'
     });
     return token;
 };
 
-const verifyMyCashToken = (token = '') => {
-    token = token.replace('Bearer ', '');
-    if (!process.env.MYCASH_JWT_SECRET) throw Error('MISSING_MYCASH_JWT_SECRET');
-    return jwt.verify(token, process.env.MYCASH_JWT_SECRET);
+const validVerifyToken = (token = '') => {
+    if (!token) {
+        throw new Error('TOKEN_REQUIRED');
+    }
+
+    if (!process.env.JWT_SECRET) {
+        throw new Error('MISSING_JWT_SECRET');
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+            issuer: process.env.JWT_ISSUER || 'henrique-store-api',
+            audience: process.env.JWT_AUDIENCE || 'henrique-store-users'
+        });
+
+        return decoded;
+    } catch (error) {
+        if (error instanceof jwt.TokenExpiredError) {
+            throw new Error('TOKEN_EXPIRED');
+        } else if (error instanceof jwt.JsonWebTokenError) {
+            throw new Error('INVALID_TOKEN_SIGNATURE');
+        } else if (error instanceof jwt.NotBeforeError) {
+            throw new Error('TOKEN_NOT_ACTIVE');
+        } else {
+            throw new Error('INVALID_TOKEN');
+        }
+    }
 };
 
-const verifyKeycloackToken = (token = '') => {
-    token = token.replace('Bearer ', '');
-    if (!process.env.KEYCLOAK_JWT_PUBLIC_KEY) throw Error('MISSING_KEYCLOAK_JWT_KEY');
-    return jwt.verify(token, process.env.KEYCLOAK_JWT_PUBLIC_KEY.replace(/\\n/g, '\n'), { algorithms: ['RS256'] });
+const decodeToken = (token = '') => {
+    if (!token) {
+        return null;
+    }
+
+    try {
+        return jwt.decode(token);
+    } catch (error) {
+        return null;
+    }
 };
 
-/**
- * Verifica o token da API interna.
- *
- * @param {string} [token=''] - Token da API interna a ser verificado.
- * @returns {object} - Retorna o payload decodificado se o token for válido.
- * @throws {Error} - Lança um erro se INTERNAL_AUTH_SECRET_KEY estiver ausente ou se o token for inválido.
- */
-const verifyInternalApiToken = (token = '') => {
-    token = token.replace('Bearer ', '').trim();
+const isTokenExpired = (token = '') => {
+    try {
+        const decoded = decodeToken(token);
+        if (!decoded || !decoded.exp) {
+            return true;
+        }
 
-    if (!process.env.INTERNAL_AUTH_SECRET_KEY) throw Error('INTERNAL_AUTH_SECRET_KEY');
-
-    return jwt.verify(token, process.env.INTERNAL_AUTH_SECRET_KEY);
-};
-
-/**
- * Gera um token para a API interna com base no payload fornecido.
- *
- * @param {object} [payload={}] - Objeto contendo informações para serem incluídas no token.
- * @param {string} [expiresIn='1d'] - Tempo de validade do token (por exemplo: '1d' para 1 dia).
- * @returns {string} - Retorna o token gerado.
- */
-const generateInternalApiToken = (payload = {}, expiresIn = '1d') => {
-    let options = {
-        expiresIn
-    };
-    return jwt.sign(payload, process.env.INTERNAL_AUTH_SECRET_KEY, options);
+        const currentTime = Math.floor(Date.now() / 1000);
+        return decoded.exp < currentTime;
+    } catch (error) {
+        return true;
+    }
 };
 
 module.exports = {
     generateToken,
-    generateInternalApiToken,
-    verifyInternalApiToken,
-    verifyMyCashToken,
-    verifyKeycloackToken
+    validVerifyToken,
+    decodeToken,
+    isTokenExpired
 };
