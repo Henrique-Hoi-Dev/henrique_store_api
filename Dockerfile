@@ -1,19 +1,41 @@
-FROM node:20-alpine
+FROM node:18-alpine
 
-RUN mkdir -p /usr/app/current
+# Criar usuário não-root para segurança
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
 
-WORKDIR /usr/app/current
+# Instalar dependências do sistema
+RUN apk add --no-cache dumb-init
 
-COPY package.json package-lock.json ./
+WORKDIR /app
 
-RUN npm i -g cross-env nodemon jest@^27.5.1 pino-pretty --silent
-RUN npm ci --silent
+# Copiar arquivos de dependências
+COPY package*.json ./
 
+# Instalar dependências
+RUN npm ci --only=production && npm cache clean --force
+
+# Copiar código fonte
 COPY . .
 
-EXPOSE 8080
+# Criar diretório para logs
+RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app
 
-ENV NODE_ENV production
+# Mudar para usuário não-root
+USER nodejs
+
+# Expor porta
+EXPOSE 3002
+
+# Definir variáveis de ambiente
+ENV NODE_ENV=production
 ENV TZ="America/Sao_Paulo"
+ENV PORT=3002
 
-CMD [ "nodemon", "server.js" ]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3002/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Iniciar aplicação com dumb-init
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "server.js"]
