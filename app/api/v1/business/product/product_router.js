@@ -7,10 +7,40 @@ const { ensureAuthorization, verifyToken } = require('../../../../main/middlewar
 
 const productController = new ProductController();
 
-router.get('/', ensureAuthorization, verifyToken, validator(validation.list), productController.list);
-router.get('/:id', ensureAuthorization, verifyToken, validator(validation.getById), productController.getById);
-router.post('/', ensureAuthorization, verifyToken, validator(validation.create), productController.create);
-router.put('/:id', ensureAuthorization, verifyToken, validator(validation.update), productController.update);
-router.delete('/:id', ensureAuthorization, verifyToken, validator(validation.softDelete), productController.softDelete);
+router.get(
+    '/',
+    ensureAuthorization,
+    verifyToken,
+    validator(validation.list),
+    productController.list.bind(productController)
+);
+router.get(
+    '/:id',
+    ensureAuthorization,
+    verifyToken,
+    validator(validation.getById),
+    productController.getById.bind(productController)
+);
+router.post(
+    '/',
+    ensureAuthorization,
+    verifyToken,
+    validator(validation.create),
+    productController.create.bind(productController)
+);
+router.put(
+    '/:id',
+    ensureAuthorization,
+    verifyToken,
+    validator(validation.update),
+    productController.update.bind(productController)
+);
+router.delete(
+    '/:id',
+    ensureAuthorization,
+    verifyToken,
+    validator(validation.softDelete),
+    productController.softDelete.bind(productController)
+);
 
 module.exports = router;
